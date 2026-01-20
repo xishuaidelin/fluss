@@ -347,7 +347,7 @@ public class FlinkSourceEnumerator
         }
     }
 
-    private List<SourceSplitBase> initNonPartitionedSplits() {
+    protected List<SourceSplitBase> initNonPartitionedSplits() {
         if (hasPrimaryKey && startingOffsetsInitializer instanceof SnapshotOffsetsInitializer) {
             // get the table snapshot info
             final KvSnapshots kvSnapshots;
@@ -358,13 +358,17 @@ public class FlinkSourceEnumerator
                         String.format("Failed to get table snapshot for %s", tablePath),
                         ExceptionUtils.stripCompletionException(e));
             }
-            return getSnapshotAndLogSplits(kvSnapshots, null);
+            List<SourceSplitBase> splits = getSnapshotAndLogSplits(kvSnapshots, null);
+            onSplitsInitialized();
+            return splits;
         } else {
-            return getLogSplit(null, null);
+            List<SourceSplitBase> splits = getLogSplit(null, null);
+            onSplitsInitialized();
+            return splits;
         }
     }
 
-    private Set<PartitionInfo> listPartitions() {
+    protected Set<PartitionInfo> listPartitions() {
         if (closed) {
             return Collections.emptySet();
         }
@@ -421,7 +425,7 @@ public class FlinkSourceEnumerator
     }
 
     /** Init the splits for Fluss. */
-    private void checkPartitionChanges(Set<PartitionInfo> partitionInfos, Throwable t) {
+    protected void checkPartitionChanges(Set<PartitionInfo> partitionInfos, Throwable t) {
         if (closed) {
             // skip if the enumerator is closed to avoid unnecessary error logs
             return;
@@ -510,12 +514,15 @@ public class FlinkSourceEnumerator
         return new PartitionChange(newPartitions, removedPartitions);
     }
 
-    private List<SourceSplitBase> initPartitionedSplits(Collection<Partition> newPartitions) {
+    protected List<SourceSplitBase> initPartitionedSplits(Collection<Partition> newPartitions) {
+        final List<SourceSplitBase> result;
         if (hasPrimaryKey && startingOffsetsInitializer instanceof SnapshotOffsetsInitializer) {
-            return initPrimaryKeyTablePartitionSplits(newPartitions);
+            result = initPrimaryKeyTablePartitionSplits(newPartitions);
         } else {
-            return initLogTablePartitionSplits(newPartitions);
+            result = initLogTablePartitionSplits(newPartitions);
         }
+        onSplitsInitialized();
+        return result;
     }
 
     private List<SourceSplitBase> initLogTablePartitionSplits(Collection<Partition> newPartitions) {
@@ -547,7 +554,7 @@ public class FlinkSourceEnumerator
         return splits;
     }
 
-    private List<SourceSplitBase> getSnapshotAndLogSplits(
+    protected List<SourceSplitBase> getSnapshotAndLogSplits(
             KvSnapshots snapshots, @Nullable String partitionName) {
         long tableId = snapshots.getTableId();
         Long partitionId = snapshots.getPartitionId();
@@ -569,7 +576,7 @@ public class FlinkSourceEnumerator
                         logOffset.isPresent(),
                         "Log offset should be present if snapshot id is present.");
                 splits.add(
-                        new HybridSnapshotLogSplit(
+                        createHybridSnapshotLogSplit(
                                 tb, partitionName, snapshotId.getAsLong(), logOffset.getAsLong()));
             } else {
                 bucketsNeedInitOffset.add(bucketId);
@@ -582,7 +589,7 @@ public class FlinkSourceEnumerator
                     .forEach(
                             (bucketId, startingOffset) ->
                                     splits.add(
-                                            new LogSplit(
+                                            createLogSplit(
                                                     new TableBucket(tableId, partitionId, bucketId),
                                                     partitionName,
                                                     startingOffset)));
@@ -591,7 +598,7 @@ public class FlinkSourceEnumerator
         return splits;
     }
 
-    private List<SourceSplitBase> getLogSplit(
+    protected List<SourceSplitBase> getLogSplit(
             @Nullable Long partitionId, @Nullable String partitionName) {
         // always assume the bucket is from 0 to bucket num
         List<SourceSplitBase> splits = new ArrayList<>();
@@ -611,7 +618,7 @@ public class FlinkSourceEnumerator
                     .forEach(
                             (bucketId, startingOffset) ->
                                     splits.add(
-                                            new LogSplit(
+                                            createLogSplit(
                                                     new TableBucket(
                                                             tableInfo.getTableId(),
                                                             partitionId,
@@ -708,7 +715,7 @@ public class FlinkSourceEnumerator
         }
     }
 
-    private void handleSplitsAdd(List<SourceSplitBase> splits, Throwable t) {
+    protected void handleSplitsAdd(List<SourceSplitBase> splits, Throwable t) {
         if (t != null) {
             if (isPartitioned && streaming && scanPartitionDiscoveryIntervalMs > 0) {
                 // it means continuously read new partition splits, not throw exception, temporally
@@ -735,7 +742,7 @@ public class FlinkSourceEnumerator
         doHandleSplitsAdd(splits);
     }
 
-    private void doHandleSplitsAdd(List<SourceSplitBase> splits) {
+    protected void doHandleSplitsAdd(List<SourceSplitBase> splits) {
         addSplitToPendingAssignments(splits);
         assignPendingSplits(context.registeredReaders().keySet());
     }
@@ -944,6 +951,75 @@ public class FlinkSourceEnumerator
         } catch (Exception e) {
             throw new IOException("Failed to close Flink Source enumerator.", e);
         }
+    }
+
+    /** Hook for subclasses after initial split creation completes. */
+    protected void onSplitsInitialized() {}
+
+    /** Factory method for hybrid snapshot/log split. */
+    protected SourceSplitBase createHybridSnapshotLogSplit(
+            TableBucket tableBucket,
+            @Nullable String partitionName,
+            long snapshotId,
+            long logStartingOffset) {
+        return new HybridSnapshotLogSplit(
+                tableBucket, partitionName, snapshotId, logStartingOffset);
+    }
+
+    /** Factory method for log split. */
+    protected SourceSplitBase createLogSplit(
+            TableBucket tableBucket, @Nullable String partitionName, long startingOffset) {
+        return new LogSplit(tableBucket, partitionName, startingOffset);
+    }
+
+    // --------------- protected accessors ---------------
+    protected WorkerExecutor getWorkerExecutor() {
+        return workerExecutor;
+    }
+
+    protected TablePath getTablePath() {
+        return tablePath;
+    }
+
+    protected boolean isPartitionedTable() {
+        return isPartitioned;
+    }
+
+    protected boolean isStreaming() {
+        return streaming;
+    }
+
+    protected long getScanPartitionDiscoveryIntervalMs() {
+        return scanPartitionDiscoveryIntervalMs;
+    }
+
+    protected Configuration getFlussConf() {
+        return flussConf;
+    }
+
+    protected SplitEnumeratorContext<SourceSplitBase> getContext() {
+        return context;
+    }
+
+    protected Set<TableBucket> getAssignedTableBuckets() {
+        return assignedTableBuckets;
+    }
+
+    protected void setNoMoreNewSplits(boolean noMoreNewSplits) {
+        this.noMoreNewSplits = noMoreNewSplits;
+    }
+
+    protected Admin getFlussAdmin() {
+        return flussAdmin;
+    }
+
+    protected TableInfo getTableInfo() {
+        return tableInfo;
+    }
+
+    @Nullable
+    protected LakeSource<LakeSplit> getLakeSource() {
+        return lakeSource;
     }
 
     // --------------- private class ---------------

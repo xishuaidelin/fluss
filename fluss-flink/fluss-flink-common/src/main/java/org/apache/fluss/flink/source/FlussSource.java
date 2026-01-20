@@ -17,7 +17,6 @@
 
 package org.apache.fluss.flink.source;
 
-import org.apache.fluss.annotation.VisibleForTesting;
 import org.apache.fluss.config.Configuration;
 import org.apache.fluss.flink.source.deserializer.FlussDeserializationSchema;
 import org.apache.fluss.flink.source.enumerator.initializer.OffsetsInitializer;
@@ -90,10 +89,5 @@ public class FlussSource<OUT> extends FlinkSource<OUT> {
      */
     public static <T> FlussSourceBuilder<T> builder() {
         return new FlussSourceBuilder<>();
-    }
-
-    @VisibleForTesting
-    OffsetsInitializer getOffsetsInitializer() {
-        return offsetsInitializer;
     }
 }

@@ -55,7 +55,7 @@ import static org.apache.fluss.flink.utils.FlinkConnectorOptionsUtils.getClientS
 
 /** Flink source for Fluss. */
 public class FlinkSource<OUT>
-        implements Source<OUT, SourceSplitBase, SourceEnumeratorState>, ResultTypeQueryable {
+        implements Source<OUT, SourceSplitBase, SourceEnumeratorState>, ResultTypeQueryable<OUT> {
     private static final long serialVersionUID = 1L;
 
     private final Configuration flussConf;
@@ -209,5 +209,57 @@ public class FlinkSource<OUT>
     @Override
     public TypeInformation<OUT> getProducedType() {
         return deserializationSchema.getProducedType(sourceOutputType);
+    }
+
+    // --------------- protected accessors for adapters ---------------
+    protected Configuration getFlussConf() {
+        return flussConf;
+    }
+
+    protected TablePath getTablePath() {
+        return tablePath;
+    }
+
+    protected boolean hasPrimaryKey() {
+        return hasPrimaryKey;
+    }
+
+    protected boolean isPartitioned() {
+        return isPartitioned;
+    }
+
+    protected RowType getSourceOutputType() {
+        return sourceOutputType;
+    }
+
+    @Nullable
+    protected int[] getProjectedFields() {
+        return projectedFields;
+    }
+
+    protected OffsetsInitializer getOffsetsInitializer() {
+        return offsetsInitializer;
+    }
+
+    protected long getScanPartitionDiscoveryIntervalMs() {
+        return scanPartitionDiscoveryIntervalMs;
+    }
+
+    protected boolean isStreaming() {
+        return streaming;
+    }
+
+    protected FlussDeserializationSchema<OUT> getDeserializationSchema() {
+        return deserializationSchema;
+    }
+
+    @Nullable
+    protected Predicate getPartitionFilters() {
+        return partitionFilters;
+    }
+
+    @Nullable
+    protected LakeSource<LakeSplit> getLakeSource() {
+        return lakeSource;
     }
 }
