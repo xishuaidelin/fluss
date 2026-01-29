@@ -156,19 +156,25 @@ public class SourceSplitSerializer implements SimpleVersionedSerializer<SourceSp
         long recordsToSkip = in.readLong();
         boolean isSnapshotFinished = in.readBoolean();
         long logStartingOffset = in.readLong();
-        long backlogMarkedOffset = NO_STOPPING_OFFSET;
         if (version >= VERSION_1) {
-            backlogMarkedOffset = in.readLong();
+            long backlogMarkedOffset = in.readLong();
+            return new HybridSnapshotLogSplit(
+                    tableBucket,
+                    partitionName,
+                    snapshotId,
+                    recordsToSkip,
+                    isSnapshotFinished,
+                    logStartingOffset,
+                    backlogMarkedOffset);
+        } else {
+            return new HybridSnapshotLogSplit(
+                    tableBucket,
+                    partitionName,
+                    snapshotId,
+                    recordsToSkip,
+                    isSnapshotFinished,
+                    logStartingOffset);
         }
-
-        return new HybridSnapshotLogSplit(
-                tableBucket,
-                partitionName,
-                snapshotId,
-                recordsToSkip,
-                isSnapshotFinished,
-                logStartingOffset,
-                backlogMarkedOffset);
     }
 
     private LogSplit deserializeLogSplit(
@@ -176,11 +182,12 @@ public class SourceSplitSerializer implements SimpleVersionedSerializer<SourceSp
             throws IOException {
         long startingOffset = in.readLong();
         long stoppingOffset = in.readLong();
-        long backlogMarkedOffset = NO_STOPPING_OFFSET;
         if (version >= VERSION_1) {
-            backlogMarkedOffset = in.readLong();
+            long backlogMarkedOffset = in.readLong();
+            return new LogSplit(
+                    tableBucket, partitionName, startingOffset, stoppingOffset, backlogMarkedOffset);
+        } else {
+            return new LogSplit(tableBucket, partitionName, startingOffset, stoppingOffset);
         }
-        return new LogSplit(
-                tableBucket, partitionName, startingOffset, stoppingOffset, backlogMarkedOffset);
     }
 }
