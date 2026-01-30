@@ -30,6 +30,7 @@ import org.apache.fluss.client.initializer.SnapshotOffsetsInitializer;
 import org.apache.fluss.client.metadata.KvSnapshots;
 import org.apache.fluss.config.ConfigOptions;
 import org.apache.fluss.config.Configuration;
+import org.apache.fluss.flink.adapter.SplitEnumeratorContextAdapter;
 import org.apache.fluss.flink.lake.LakeSplitGenerator;
 import org.apache.fluss.flink.lake.split.LakeSnapshotAndFlussLogSplit;
 import org.apache.fluss.flink.lake.split.LakeSnapshotSplit;
@@ -316,7 +317,7 @@ public class FlinkSourceEnumerator
     }
 
     private void initializeBacklog() {
-        context.setIsProcessingBacklog(true);
+        SplitEnumeratorContextAdapter.setIsProcessingBacklog(context, true);
         hasBacklogTbls.clear();
         try {
             recordBacklogBoundaryOffsets();
@@ -924,7 +925,7 @@ public class FlinkSourceEnumerator
             final TableBucket bucket = event.getTableBucket();
             hasBacklogTbls.remove(bucket);
             if (hasBacklogTbls.isEmpty()) {
-                context.setIsProcessingBacklog(false);
+                SplitEnumeratorContextAdapter.setIsProcessingBacklog(context, false);
                 LOG.info(
                         "Table {} finished reading backlog data and isProcessingBacklog set to false.",
                         tablePath);
