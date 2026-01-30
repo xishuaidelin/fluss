@@ -761,10 +761,11 @@ class FlinkSourceEnumeratorTest extends FlinkTestBase {
     }
 
     @Test
-    void testReportBacklogStatus() throws Throwable {
+    void testBacklogStatusTransitionOnEventCompletion() throws Throwable {
         long tableId = createTable(DEFAULT_TABLE_PATH, DEFAULT_PK_TABLE_DESCRIPTOR);
         int numSubtasks = 3;
 
+        Map<Integer, Integer> bucketIdToNumRecords = putRows(DEFAULT_TABLE_PATH, 30);
         try (MockBacklogSplitEnumeratorContext context =
                 new MockBacklogSplitEnumeratorContext(numSubtasks)) {
             FlinkSourceEnumerator enumerator =
@@ -780,11 +781,10 @@ class FlinkSourceEnumeratorTest extends FlinkTestBase {
                             null,
                             null);
             enumerator.start();
-            assertThat(context.isProcessingBacklogCalled()).isTrue();
+            assertThat(context.getIsProcessingBacklog()).isTrue();
 
-            // Register readers
-            for (int i = 0; i < numSubtasks; i++) {
-                registerReader(context, enumerator, i);
+            for (int bucketId : bucketIdToNumRecords.keySet()) {
+                registerReader(context, enumerator, bucketId);
             }
 
             context.runNextOneTimeCallable();
@@ -802,7 +802,7 @@ class FlinkSourceEnumeratorTest extends FlinkTestBase {
             enumerator.handleSourceEvent(1, event1);
             enumerator.handleSourceEvent(2, event2);
 
-            assertThat(context.isProcessingBacklogCalled()).isFalse();
+            assertThat(context.getIsProcessingBacklog()).isFalse();
         }
     }
 
@@ -1013,7 +1013,7 @@ class FlinkSourceEnumeratorTest extends FlinkTestBase {
     private static class MockBacklogSplitEnumeratorContext
             extends MockSplitEnumeratorContext<SourceSplitBase> {
 
-        private volatile boolean isProcessingBacklogCalled;
+        private volatile boolean processingBacklogState;
 
         public MockBacklogSplitEnumeratorContext(int parallelism) {
             super(parallelism);
@@ -1021,11 +1021,11 @@ class FlinkSourceEnumeratorTest extends FlinkTestBase {
 
         @Override
         public void setIsProcessingBacklog(boolean isProcessingBacklog) {
-            this.isProcessingBacklogCalled = isProcessingBacklog;
+            this.processingBacklogState = isProcessingBacklog;
         }
 
-        public boolean isProcessingBacklogCalled() {
-            return isProcessingBacklogCalled;
+        public boolean getIsProcessingBacklog() {
+            return processingBacklogState;
         }
     }
 }
