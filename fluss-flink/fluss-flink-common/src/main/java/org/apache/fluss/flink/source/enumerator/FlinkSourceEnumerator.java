@@ -315,8 +315,20 @@ public class FlinkSourceEnumerator
         }
     }
 
+    private void setIsProcessingBacklog(boolean isProcessingBacklog) {
+        try {
+            SplitEnumeratorContext.class
+                    .getMethod("setIsProcessingBacklog", boolean.class)
+                    .invoke(context, isProcessingBacklog);
+        } catch (NoSuchMethodException e) {
+            // Ignore
+        } catch (Exception e) {
+            LOG.warn("Failed to set isProcessingBacklog.", e);
+        }
+    }
+
     private void initializeBacklog() {
-        context.setIsProcessingBacklog(true);
+        setIsProcessingBacklog(true);
         hasBacklogTbls.clear();
         try {
             recordBacklogBoundaryOffsets();
@@ -924,7 +936,7 @@ public class FlinkSourceEnumerator
             final TableBucket bucket = event.getTableBucket();
             hasBacklogTbls.remove(bucket);
             if (hasBacklogTbls.isEmpty()) {
-                context.setIsProcessingBacklog(false);
+                setIsProcessingBacklog(false);
                 LOG.info(
                         "Table {} finished reading backlog data and isProcessingBacklog set to false.",
                         tablePath);
