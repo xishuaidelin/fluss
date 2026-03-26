@@ -1011,7 +1011,7 @@ public class FlinkSourceEnumerator
 
         // Assign pending splits to readers
         if (!incrementalAssignment.isEmpty()) {
-            LOG.info("Assigning splits to readers {}", incrementalAssignment);
+            // LOG.info("Assigning splits to readers {}", incrementalAssignment);
             context.assignSplits(new SplitsAssignment<>(incrementalAssignment));
             sendMarkedBacklogOffsetEvents(incrementalAssignment);
         }
